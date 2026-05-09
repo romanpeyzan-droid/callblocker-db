@@ -1,4 +1,4 @@
-name: Update Spam Database
+name: Clean Spam Database
 
 on:
   schedule:
@@ -6,48 +6,30 @@ on:
   workflow_dispatch:
 
 jobs:
-  update:
+  clean:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/checkout@v3
 
-      - name: Download and Merge Lists
+      - name: Clean and Sort
         run: |
-          mkdir sources
-          
-          # Источник 1
-          curl -s "https://raw.githubusercontent.com/ahadik/spam-numbers/main/spam.csv" > sources/src1.txt || true
-          
-          # Источник 2
-          curl -s "https://raw.githubusercontent.com/pmarques/spam-numbers/main/numbers.txt" > sources/src2.txt || true
-          
-          # Твой файл (чтобы сохранить старые номера)
-          curl -s "https://raw.githubusercontent.com/${{ github.repository }}/main/spam-numbers.txt" > sources/mylist.txt || true
-          
-          # Объединяем
-          cat sources/*.txt > combined.txt
-          
-          # Оставляем только номера (10-15 цифр), убираем дубли, заменяем 8 на +7
-          grep -oP '\+?\d{10,15}' combined.txt | \
+          # Просто чистим твой файл: убираем дубли, сортируем, заменяем 8 на +7
+          grep -oP '\+?\d{10,15}' spam-numbers.txt | \
           sed 's/^8/+7/' | \
-          sort -u > spam-numbers.txt
+          sort -u > temp.txt
           
-          echo "Numbers: $(wc -l < spam-numbers.txt)"
+          mv temp.txt spam-numbers.txt
+          
+          echo "✅ Total: $(wc -l < spam-numbers.txt) numbers"
 
-      - name: Commit and Push
+      - name: Commit
         run: |
-          git config user.name "GitHub Actions Bot"
-          git config user.email "bot@github.com"
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
           
           if ! git diff --quiet spam-numbers.txt; then
             git add spam-numbers.txt
-            git commit -m "Auto-update: $(date '+%Y-%m-%d')"
+            git commit -m "Cleaned numbers"
             git push
-            echo "Updated!"
-          else
-            echo "No changes."
           fi
