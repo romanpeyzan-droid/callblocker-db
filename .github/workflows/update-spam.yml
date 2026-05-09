@@ -2,58 +2,52 @@ name: Update Spam Database
 
 on:
   schedule:
-    # Запуск каждый день в 06:00 по МСК (03:00 UTC)
     - cron: '0 3 * * *'
-  workflow_dispatch: # Для ручного запуска
+  workflow_dispatch:
 
 jobs:
   update:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write # Разрешение на запись в репозиторий
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v3
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-           - name: Download and Merge Lists
+      - name: Download and Merge Lists
         run: |
           mkdir sources
           
-          # Источник 1: Большая открытая база
-          curl -s "https://raw.githubusercontent.com/first20hours/google-play-store-spam-numbers/master/spam-numbers.csv" > sources/src1.txt || true
+          # Источник 1
+          curl -s "https://raw.githubusercontent.com/ahadik/spam-numbers/main/spam.csv" > sources/src1.txt || true
           
-          # Источник 2: Another spam database
+          # Источник 2
           curl -s "https://raw.githubusercontent.com/pmarques/spam-numbers/main/numbers.txt" > sources/src2.txt || true
           
-          # Источник 3: Spam number list
-          curl -s "https://raw.githubusercontent.com/ahadik/spam-numbers/main/spam.csv" > sources/src3.txt || true
-          
-          # Источник 4: Твой текущий файл (чтобы не потерять)
+          # Твой файл (чтобы сохранить старые номера)
           curl -s "https://raw.githubusercontent.com/${{ github.repository }}/main/spam-numbers.txt" > sources/mylist.txt || true
           
-          # Объединяем всё
+          # Объединяем
           cat sources/*.txt > combined.txt
           
-          # Фильтруем: оставляем только номера (10-15 цифр), убираем дубли
-          grep -oP '(\+?7|8)?\d{10,15}' combined.txt | \
+          # Оставляем только номера (10-15 цифр), убираем дубли, заменяем 8 на +7
+          grep -oP '\+?\d{10,15}' combined.txt | \
           sed 's/^8/+7/' | \
           sort -u > spam-numbers.txt
           
-          echo "📊 Итого номеров: $(wc -l < spam-numbers.txt)"
+          echo "Numbers: $(wc -l < spam-numbers.txt)"
+
       - name: Commit and Push
         run: |
           git config user.name "GitHub Actions Bot"
           git config user.email "bot@github.com"
           
-          # Проверяем, изменился ли файл
           if ! git diff --quiet spam-numbers.txt; then
             git add spam-numbers.txt
-            git commit -m " Auto-update: $(date '+%Y-%m-%d')"
+            git commit -m "Auto-update: $(date '+%Y-%m-%d')"
             git push
-            echo "✅ База обновлена!"
+            echo "Updated!"
           else
-            echo "ℹ️ Новых номеров нет."
+            echo "No changes."
           fi
