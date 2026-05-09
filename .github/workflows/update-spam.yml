@@ -1,0 +1,54 @@
+name: Update Spam Database
+
+on:
+  schedule:
+    # Запуск каждый день в 06:00 по МСК (03:00 UTC)
+    - cron: '0 3 * * *'
+  workflow_dispatch: # Для ручного запуска
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Разрешение на запись в репозиторий
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download and Merge Lists
+        run: |
+          mkdir sources
+          
+          # Источник 1: Внешний открытый список (пример)
+          curl -s "https://raw.githubusercontent.com/schubergphilis/spam-numbers/master/numbers.txt" > sources/ext1.txt || true
+          
+          # Источник 2: Твой текущий файл (чтобы не потерять то, что добавил сам)
+          curl -s "https://raw.githubusercontent.com/${{ github.repository }}/main/spam-numbers.txt" > sources/my_current.txt || true
+          
+          # Объединяем все в один файл
+          cat sources/*.txt > combined.txt
+          
+          # Оставляем только номера (10-12 цифр), убираем дубли, сортируем
+          grep -oP '(\+?7|8)?\d{10,12}' combined.txt | \
+          sed 's/^8/+7/' | \
+          sort -u > spam-numbers.txt
+          
+          echo "📊 Итого номеров: $(wc -l < spam-numbers.txt)"
+
+      - name: Commit and Push
+        run: |
+          git config user.name "GitHub Actions Bot"
+          git config user.email "bot@github.com"
+          
+          # Проверяем, изменился ли файл
+          if ! git diff --quiet spam-numbers.txt; then
+            git add spam-numbers.txt
+            git commit -m " Auto-update: $(date '+%Y-%m-%d')"
+            git push
+            echo "✅ База обновлена!"
+          else
+            echo "ℹ️ Новых номеров нет."
+          fi
